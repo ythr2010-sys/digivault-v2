@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>البوابة الأمنية | الخزنة الرقمية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body style="display:flex; align-items:center; justify-content:center; min-height:100vh;">
+    <div style="width:100%; max-width:420px; background:var(--bg-card); border:1px solid var(--border-line); border-radius:16px; padding:30px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+        <a href="index.html" style="color:var(--text-sub); text-decoration:none; font-size:0.85rem; display:inline-block; margin-bottom:15px;">← العودة للمتجر</a>
+        <h1 style="font-size:1.5rem; color:var(--accent-cyan); margin-bottom:20px;" id="formTitle">تسجيل الدخول 🔐</h1>
+        
+        <form id="authForm" onsubmit="handleAuthSubmit(event)">
+            <div id="nameGroup" class="form-group" style="display:none; margin-bottom:15px;">
+                <label style="display:block; margin-bottom:6px; font-weight:bold;">الاسم الكامل</label>
+                <input type="text" id="fullName" placeholder="محمد ياسر">
+            </div>
+            <div class="form-group" style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:6px; font-weight:bold;">البريد الإلكتروني</label>
+                <input type="email5" id="userEmail" required placeholder="name@example.com">
+            </div>
+            <div class="form-group" style="margin-bottom:20px;">
+                <label style="display:block; margin-bottom:6px; font-weight:bold;">كلمة المرور</label>
+                <input type="password" id="userPass" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn-primary" style="width:100%;" id="authBtn">دخول</button>
+        </form>
+
+        <p style="text-align:center; margin-top:20px; font-size:0.85rem; color:var(--text-sub);">
+            <span id="switchText">ليس لديك حساب؟</span> 
+            <span style="color:var(--accent-cyan); cursor:pointer; font-weight:bold;" onclick="toggleAuthMode()" id="switchBtn">إنشاء حساب جديد</span>
+        </p>
+    </div>
+
+    <script type="module">
+        import { db, auth, SUPER_ADMIN_EMAIL } from "./js/firebase-core.js";
+        import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        let isLoginMode = true;
+
+        window.toggleAuthMode = () => {
+            isLoginMode = !isLoginMode;
+            document.getElementById("formTitle").textContent = isLoginMode ? "تسجيل الدخول 🔐" : "إنشاء حساب جديد ✨";
+            document.getElementById("nameGroup").style.display = isLoginMode ? "none" : "block";
+            document.getElementById("authBtn").textContent = isLoginMode ? "دخول" : "إنشاء الحساب";
+            document.getElementById("switchText").textContent = isLoginMode ? "ليس لديك حساب؟" : "لديك حساب بالفعل؟";
+            document.getElementById("switchBtn").textContent = isLoginMode ? "إنشاء حساب جديد" : "تسجيل الدخول";
+        };
+
+        window.handleAuthSubmit = async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("userEmail").value.trim();
+            const pass = document.getElementById("userPass").value.trim();
+            const name = document.getElementById("fullName").value.trim();
+            const btn = document.getElementById("authBtn");
+
+            btn.disabled = true;
+            btn.textContent = "جاري المعالجة...";
+
+            try {
+                if (isLoginMode) {
+                    await signInWithEmailAndPassword(auth, email, pass);
+                    window.showToast("أهلاً بك مجدداً!");
+                } else {
+                    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+                    const role = (email === SUPER_ADMIN_EMAIL) ? 'super_admin' : 'user';
+                    await setDoc(doc(db, "users", cred.user.uid), {
+                        email, name: name || 'مستخدم', role, createdAt: new Date()
+                    });
+                    window.showToast("تم إنشاء الحساب بنجاح!");
+                }
+                setTimeout(() => window.location.href = "index.html", 1000);
+            } catch (err) {
+                window.showToast("خطأ: تأكد من البيانات المدخلة.");
+                btn.disabled = false;
+                btn.textContent = isLoginMode ? "دخول" : "إنشاء الحساب";
+            }
+        };
+    </script>
+</body>
+</html>

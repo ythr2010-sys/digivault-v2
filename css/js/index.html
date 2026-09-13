@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الخزنة الرقمية | المتجر الشامل</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <aside class="sidebar">
+            <div class="logo"><a href="index.html">الخزنة<span>الرقمية</span></a></div>
+            <ul class="sidebar-menu">
+                <li><a href="index.html" class="active">🏠 المتجر الرئيسي</a></li>
+                <li><a href="library.html">📚 مكتبتي والتحميلات</a></li>
+                <li><a href="upload.html">➕ رفع منتج جديد</a></li>
+                <li><a href="contact.html">📩 تواصل معنا</a></li>
+                <li id="adminNav" style="display:none;"><a href="admin.html" style="color:var(--accent-cyan)">👑 لوحة الأدمن</a></li>
+                <li id="authNavLi"><a href="auth.html">🔑 دخول / حساب جديد</a></li>
+                <li><button id="logoutBtn" class="btn-logout-sidebar" style="display:none;" onclick="handleLogout()">🚪 تسجيل الخروج</button></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; flex-wrap:wrap; gap:15px;">
+                <h1 style="font-size:1.8rem;">كتالوج الأصول الرقمية ⚡</h1>
+                <div id="notifBell" style="position:relative; cursor:pointer; background:var(--bg-card); padding:10px 14px; border-radius:10px; border:1px solid var(--border-line);">
+                    🔔 الإشعارات <span id="notifBadge" style="background:var(--danger-red); color:#fff; border-radius:50%; padding:2px 7px; font-size:0.75rem; display:none;">0</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <input type="text" id="searchInput" placeholder="🔍 ابحث عن اسم منتج أو وصف..." oninput="filterProducts()">
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom:25px; flex-wrap:wrap;">
+                <button class="btn-primary filter-tab active" data-cat="all" onclick="setCategory('all', this)">الكل</button>
+                <button class="btn-primary filter-tab" data-cat="books" style="background:var(--bg-card); border:1px solid var(--border-line);" onclick="setCategory('books', this)">📚 كتب</button>
+                <button class="btn-primary filter-tab" data-cat="models" style="background:var(--bg-card); border:1px solid var(--border-line);" onclick="setCategory('models', this)">🎨 مجسمات 3D</button>
+                <button class="btn-primary filter-tab" data-cat="courses" style="background:var(--bg-card); border:1px solid var(--border-line);" onclick="setCategory('courses', this)">🎓 دورات</button>
+            </div>
+
+            <div id="productsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:20px;">
+                <p style="color:var(--text-sub);">جاري تحميل المنتجات...</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- نافذة إشعارات العميل المصغرة -->
+    <div id="notifModal" style="position:fixed; top:70px; left:30px; width:320px; background:var(--bg-card); border:1px solid var(--accent-cyan); border-radius:12px; padding:15px; display:none; z-index:4000; box-shadow:0 10px 30px rgba(0,0,0,0.6);">
+        <h3 style="font-size:1rem; margin-bottom:10px;">الإشعارات الواردة</h3>
+        <div id="notifList" style="max-height:220px; overflow-y:auto; font-size:0.85rem; color:var(--text-sub);">لا توجد إشعارات جديدة</div>
+        <button style="margin-top:10px; width:100%; background:none; border:none; color:var(--accent-cyan); cursor:pointer;" onclick="closeNotifModal()">إغلاق</button>
+    </div>
+
+    <script type="module">
+        import { db, auth, SUPER_ADMIN_EMAIL, trackVisitorOnce } from "./js/firebase-core.js";
+        import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        trackVisitorOnce();
+
+        let allProducts = [];
+        let activeCategory = 'all';
+        let currentAuthUser = null;
+
+        onAuthStateChanged(auth, async (user) => {
+            currentAuthUser = user;
+            const authLi = document.getElementById("authNavLi");
+            const logoutBtn = document.getElementById("logoutBtn");
+            const adminNav = document.getElementById("adminNav");
+
+            if (user) {
+                authLi.style.display = "none";
+                logoutBtn.style.display = "block";
+                let isAdmin = user.email === SUPER_ADMIN_EMAIL;
+                if (!isAdmin) {
+                    try {
+                        const uDoc = await getDoc(doc(db, "users", user.uid));
+                        if (uDoc.exists() && (uDoc.data().role === 'super_admin' || uDoc.data().role === 'assistant')) {
+                            isAdmin = true;
+                        }
+                    } catch(e){}
+                }
+                if (adminNav) adminNav.style.display = isAdmin ? "block" : "none";
+                loadUserNotifications(user.email);
+            } else {
+                authLi.style.display = "block";
+                logoutBtn.style.display = "none";
+                if (adminNav) adminNav.style.display = "none";
+            }
+        });
+
+        window.handleLogout = async () => { await signOut(auth); window.location.reload(); };
+
+        async function fetchProducts() {
+            try {
+                const q = query(collection(db, "products"), where("status", "==", "approved"));
+                const snap = await getDocs(q);
+                allProducts = [];
+                snap.forEach(d => allProducts.push({ id: d.id, ...d.data() }));
+                renderProducts();
+            } catch(e) {
+                document.getElementById("productsGrid").innerHTML = `<p style="color:var(--danger-red)">خطأ في جلب المنتجات تأكد من الاتصال.</p>`;
+            }
+        }
+
+        window.setCategory = (cat, btn) => {
+            activeCategory = cat;
+            document.querySelectorAll('.filter-tab').forEach(b => {
+                b.style.background = 'var(--bg-card)';
+                b.style.border = '1px solid var(--border-line)';
+            });
+            btn.style.background = 'linear-gradient(135deg, var(--accent-cyan), var(--accent-purple))';
+            btn.style.border = 'none';
+            renderProducts();
+        };
+
+        window.filterProducts = renderProducts;
+
+        function renderProducts() {
+            const queryText = (document.getElementById("searchInput").value || "").toLowerCase();
+            const grid = document.getElementById("productsGrid");
+            const filtered = allProducts.filter(p => {
+                const matchCat = (activeCategory === 'all' || p.cat === activeCategory);
+                const matchText = (p.title || '').toLowerCase().includes(queryText) || (p.description || '').toLowerCase().includes(queryText);
+                return matchCat && matchText;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<p style="color:var(--text-sub)">لا توجد منتجات مطابقة.</p>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => `
+                <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:12px; padding:15px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer;" onclick="location.href='product.html?id=${p.id}'">
+                    <div>
+                        <div style="height:150px; background:#1b1b2d; border-radius:8px; overflow:hidden; margin-bottom:10px;">
+                            <img src="${p.imageUrl || 'https://via.placeholder.com/300x150'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='https://via.placeholder.com/300x150'">
+                        </div>
+                        <span style="font-size:0.75rem; background:rgba(138,43,226,0.2); color:#c084fc; padding:3px 8px; border-radius:4px; font-weight:bold;">${p.badge || 'رقمي'}</span>
+                        <h3 style="font-size:1.05rem; margin:8px 0; color:#fff;">${p.title}</h3>
+                        <p style="font-size:0.8rem; color:var(--text-sub); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${p.description || ''}</p>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid var(--border-line); pt:10px;">
+                        <span style="font-weight:900; color:var(--success-green);">${p.price === 'مجاني' || !p.price ? 'مجاني' : '$' + p.price}</span>
+                        <span style="color:var(--accent-cyan); font-size:0.85rem; font-weight:bold;">التفاصيل ←</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadUserNotifications(email) {
+            try {
+                const q = query(collection(db, "notifications"), where("recipientEmail", "==", email));
+                const snap = await getDocs(q);
+                let unread = 0;
+                let html = "";
+                snap.forEach(d => {
+                    const data = d.data();
+                    if (!data.read) unread++;
+                    html += `<div style="padding:8px 0; border-bottom:1px solid var(--border-line);"><strong>${data.title}</strong><p>${data.message}</p></div>`;
+                });
+                const badge = document.getElementById("notifBadge");
+                if (unread > 0) {
+                    badge.style.display = "inline-block";
+                    badge.textContent = unread;
+                }
+                if (html) document.getElementById("notifList").innerHTML = html;
+            } catch(e){}
+        }
+
+        document.getElementById("notifBell").onclick = () => {
+            const modal = document.getElementById("notifModal");
+            modal.style.display = modal.style.display === "block" ? "none" : "block";
+        };
+
+        window.closeNotifModal = () => { document.getElementById("notifModal").style.display = "none"; };
+
+        fetchProducts();
+    </script>
+</body>
+</html>

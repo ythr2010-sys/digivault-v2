@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم السيادية | الخزنة الرقمية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <aside class="sidebar">
+            <div class="logo"><a href="index.html">الخزنة<span>الرقمية</span></a></div>
+            <ul class="sidebar-menu">
+                <li><a href="index.html">🏠 المتجر الرئيسي</a></li>
+                <li><a href="admin.html" class="active">👑 لوحة الأدمن</a></li>
+                <li><button onclick="handleLogout()" class="btn-logout-sidebar">🚪 خروج</button></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <h1 style="font-size:1.8rem; margin-bottom:20px;">لوحة الإدارة الشاملة ⚡</h1>
+            
+            <div id="statsBox" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:15px; margin-bottom:30px;">
+                <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-line);">
+                    <p style="color:var(--text-sub); font-size:0.85rem;">إجمالي الزوار</p>
+                    <h2 id="statVisitors" style="font-size:1.8rem; color:var(--accent-cyan); margin-top:5px;">0</h2>
+                </div>
+                <div style="background:var(--bg-card); padding:20px; border-radius:12px; border:1px solid var(--border-line);">
+                    <p style="color:var(--text-sub); font-size:0.85rem;">الأرباح المؤكدة</p>
+                    <h2 id="statEarnings" style="font-size:1.8rem; color:var(--success-green); margin-top:5px;">$0</h2>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+                <button class="btn-primary" onclick="switchAdminTab('orders')">طلبات الدفع المعلقة</button>
+                <button class="btn-primary" style="background:var(--bg-card); border:1px solid var(--border-line);" onclick="switchAdminTab('messages')">صندوق رسائل الدعم</button>
+                <button class="btn-primary" style="background:var(--bg-card); border:1px solid var(--border-line);" onclick="switchAdminTab('assistants')">إدارة المساعدين</button>
+            </div>
+
+            <div id="adminPanelContent" style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:16px; padding:20px;">
+                <p style="color:var(--text-sub);">اختر تبويباً للعرض.</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { db, auth, SUPER_ADMIN_EMAIL } from "./js/firebase-core.js";
+        import { collection, getDocs, doc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        window.handleLogout = async () => { await signOut(auth); location.href="index.html"; };
+
+        onAuthStateChanged(auth, async (u) => {
+            if(!u) { location.href="auth.html"; return; }
+            let allowed = (u.email === SUPER_ADMIN_EMAIL);
+            if(!allowed) {
+                const snap = await getDoc(doc(db, "users", u.uid));
+                if(snap.exists() && ['super_admin','assistant'].includes(snap.data().role)) allowed = true;
+            }
+            if(!allowed) { location.href="index.html"; return; }
+            loadGlobalStats();
+            switchAdminTab('orders');
+        });
+
+        async function loadGlobalStats() {
+            try {
+                const sSnap = await getDoc(doc(db, "stats", "global"));
+                if(sSnap.exists()) document.getElementById("statVisitors").textContent = sSnap.data().totalVisitors || 0;
+                
+                const oSnap = await getDocs(collection(db, "orders"));
+                let earnings = 0;
+                oSnap.forEach(d => {
+                    const data = d.data();
+                    if(data.status === 'approved' && !isNaN(Number(data.price))) {
+                        earnings += Number(data.price);
+                    }
+                });
+                document.getElementById("statEarnings").textContent = `$${earnings}`;
+            } catch(e){}
+        }
+
+        window.switchAdminTab = async (tab) => {
+            const container = document.getElementById("adminPanelContent");
+            if(tab === 'orders') {
+                const snap = await getDocs(collection(db, "orders"));
+                let html = "<h3 style='margin-bottom:15px;'>طلبات الدفع</h3>";
+                snap.forEach(d => {
+                    const o = d.data();
+                    if(o.status === 'pending_payment') {
+                        html += `
+                            <div style="background:#0e0e1a; padding:12px; border-radius:8px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong>${o.customerEmail}</strong> - ${o.productTitle} (${o.price})
+                                    <p style="font-size:0.8rem; color:var(--text-sub);">الإيصال: ${o.paymentRef}</p>
+                                </div>
+                                <button class="btn-primary" style="padding:6px 12px; font-size:0.8rem;" onclick="approveOrder('${d.id}')">تأكيد وقبول</button>
+                            </div>
+                        `;
+                    }
+                });
+                container.innerHTML = html || "<p style='color:var(--text-sub)'>لا توجد طلبات معلقة.</p>";
+            } else if(tab === 'messages') {
+                const snap = await getDocs(collection(db, "messages"));
+                let html = "<h3 style='margin-bottom:15px;'>رسائل تواصل معنا</h3>";
+                snap.forEach(d => {
+                    const m = d.data();
+                    html += `
+                        <div style="background:#0e0e1a; padding:12px; border-radius:8px; margin-bottom:10px;">
+                            <strong>${m.senderEmail}</strong> | ${m.subject}
+                            <p style="font-size:0.9rem; margin-top:5px;">${m.text}</p>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html || "<p style='color:var(--text-sub)'>لا توجد رسائل.</p>";
+            } else if(tab === 'assistants') {
+                container.innerHTML = `
+                    <h3>إضافة مساعد جديد</h3>
+                    <div style="margin-top:15px; display:flex; gap:10px;">
+                        <input type="email" id="asstEmail" placeholder="assistant@example.com">
+                        <button class="btn-primary" onclick="addAssistant()">منح صلاحية مساعد</button>
+                    </div>
+                `;
+            }
+        };
+
+        window.approveOrder = async (orderId) => {
+            const ref = doc(db, "orders", orderId);
+            const snap = await getDoc(ref);
+            if(snap.exists()) {
+                const data = snap.data();
+                await updateDoc(ref, { status: 'approved' });
+                // نقل للمكتبة
+                const qSnap = await getDocs(collection(db, "products"));
+                let dlUrl = "";
+                qSnap.forEach(p => { if(p.id === data.productId) dlUrl = p.data().downloadUrl; });
+                await setDoc(doc(db, "user_library", `${data.customerEmail.replace(/[^a-zA-Z0-9]/g, '_')}_${data.productId}`), {
+                    userEmail: data.customerEmail,
+                    productId: data.productId,
+                    title: data.productTitle,
+                    downloadUrl: dlUrl || '#',
+                    acquiredAt: new Date()
+                });
+                window.showToast("تم اعتماد الطلب ونقله للمكتبة الرقمية!");
+                switchAdminTab('orders');
+                loadGlobalStats();
+            }
+        };
+
+        window.addAssistant = async () => {
+            const email = document.getElementById("asstEmail").value.trim();
+            if(!email) return;
+            try {
+                await setDoc(doc(db, "users", email.replace(/[^a-zA-Z0-9]/g, '_')), {
+                    email, role: 'assistant', createdAt: new Date()
+                }, { merge: true });
+                window.showToast("تم تعيين الحساب كـ مساعد بنجاح!");
+            } catch(e) { window.showToast("خطأ"); }
+        };
+    </script>
+</body>
+</html>

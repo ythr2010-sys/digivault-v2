@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تواصل معنا | الخزنة الرقمية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <aside class="sidebar">
+            <div class="logo"><a href="index.html">الخزنة<span>الرقمية</span></a></div>
+            <ul class="sidebar-menu">
+                <li><a href="index.html">🏠 المتجر الرئيسي</a></li>
+                <li><a href="library.html">📚 مكتبتي والتحميلات</a></li>
+                <li><a href="upload.html">➕ رفع منتج جديد</a></li>
+                <li><a href="contact.html" class="active">📩 تواصل معنا</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div style="max-width:550px; background:var(--bg-card); border:1px solid var(--border-line); border-radius:16px; padding:30px;">
+                <h1 style="font-size:1.5rem; color:var(--accent-cyan); margin-bottom:15px;">تواصل معنا 📩</h1>
+                <form id="contactForm" onsubmit="sendContactMessage(event)">
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">البريد الإلكتروني</label>
+                        <input type="email" id="cEmail" required placeholder="name@example.com">
+                    </div>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">الموضوع</label>
+                        <input type="text" id="cSubject" required placeholder="استفسار عام / تقرير مشكلة">
+                    </div>
+                    <div class="form-group" style="margin-bottom:20px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">نص الرسالة</label>
+                        <textarea id="cText" required rows="4"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width:100%;">إرسال الرسالة</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { db } from "./js/firebase-core.js";
+        import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        window.sendContactMessage = async (e) => {
+            e.preventDefault();
+            try {
+                await addDoc(collection(db, "messages"), {
+                    senderEmail: document.getElementById("cEmail").value.trim(),
+                    subject: document.getElementById("cSubject").value.trim(),
+                    text: document.getElementById("cText").value.trim(),
+                    status: 'open',
+                    createdAt: serverTimestamp()
+                });
+                window.showToast("تم إرسال رسالتك بنجاح!");
+                document.getElementById("contactForm").reset();
+            } catch(err) {
+                window.showToast("خطأ في الإرسال.");
+            }
+        };
+    </script>
+</body>
+</html>

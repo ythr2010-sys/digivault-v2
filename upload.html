@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>رفع منتج جديد | الخزنة الرقمية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <aside class="sidebar">
+            <div class="logo"><a href="index.html">الخزنة<span>الرقمية</span></a></div>
+            <ul class="sidebar-menu">
+                <li><a href="index.html">🏠 المتجر الرئيسي</a></li>
+                <li><a href="library.html">📚 مكتبتي والتحميلات</a></li>
+                <li><a href="upload.html" class="active">➕ رفع منتج جديد</a></li>
+                <li><a href="contact.html">📩 تواصل معنا</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div style="max-width:650px; background:var(--bg-card); border:1px solid var(--border-line); border-radius:16px; padding:30px;">
+                <h1 style="font-size:1.5rem; color:var(--accent-cyan); margin-bottom:10px;">إرسال منتج رقمي جديد 📦</h1>
+                <p id="uploaderStatus" style="font-size:0.85rem; color:var(--text-sub); margin-bottom:25px;">جاري التحقق من الحساب...</p>
+
+                <form id="uploadForm" onsubmit="handleProductUpload(event)">
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">عنوان المنتج</label>
+                        <input type="text" id="pTitle" required placeholder="مثال: دورة بايثون كاملة">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:18px;">
+                        <div>
+                            <label style="display:block; margin-bottom:6px; font-weight:bold;">التصنيف</label>
+                            <select id="pCat">
+                                <option value="books">📚 كتب وروايات</option>
+                                <option value="models">🎨 مجسمات 3D/2D</option>
+                                <option value="courses">🎓 دورات فيديو</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom:6px; font-weight:bold;">الشارة (Badge)</label>
+                            <input type="text" id="pBadge" value="رقمي">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">السعر (اكتب "مجاني" أو رقم بالدولار مثل 5)</label>
+                        <input type="text" id="pPrice" value="مجاني" required>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">رابط الغلاف (Image URL)</label>
+                        <input type="url" id="pImgUrl" placeholder="https://...">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:18px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">رابط الملف الكبير (Google Drive / Mega)</label>
+                        <input type="url" id="pDownloadUrl" required placeholder="https://drive.google.com/...">
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:25px;">
+                        <label style="display:block; margin-bottom:6px; font-weight:bold;">وصف المنتج</label>
+                        <textarea id="pDesc" required rows="3"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width:100%;" id="uploadBtn">إرسال للمراجعة / النشر 🚀</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { db, auth } from "./js/firebase-core.js";
+        import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        let userEmail = 'guest@digivault';
+        onAuthStateChanged(auth, u => {
+            const status = document.getElementById("uploaderStatus");
+            if (u) {
+                userEmail = u.email;
+                status.innerHTML = `🟢 متصل بحساب: <strong>${u.email}</strong>`;
+            } else {
+                status.innerHTML = `🟡 ترفع كضيف (${userEmail})`;
+            }
+        });
+
+        window.handleProductUpload = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById("uploadBtn");
+            btn.disabled = true;
+            btn.textContent = "جاري الحفظ...";
+
+            try {
+                await addDoc(collection(db, "products"), {
+                    title: document.getElementById("pTitle").value.trim(),
+                    cat: document.getElementById("pCat").value,
+                    badge: document.getElementById("pBadge").value.trim(),
+                    price: document.getElementById("pPrice").value.trim(),
+                    imageUrl: document.getElementById("pImgUrl").value.trim() || 'https://via.placeholder.com/300x150',
+                    downloadUrl: document.getElementById("pDownloadUrl").value.trim(),
+                    description: document.getElementById("pDesc").value.trim(),
+                    uploaderEmail: userEmail,
+                    status: "approved",
+                    createdAt: serverTimestamp()
+                });
+                window.showToast("تم إرسال ونشر المنتج بنجاح!");
+                setTimeout(() => location.href = "index.html", 1200);
+            } catch(err) {
+                window.showToast("حدث خطأ أثناء رفع المنتج.");
+                btn.disabled = false;
+                btn.textContent = "إرسال للمراجعة / النشر 🚀";
+            }
+        };
+    </script>
+</body>
+</html>
